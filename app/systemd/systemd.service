@@ -1,0 +1,18 @@
+[Unit]
+Description={{ .Description }}
+Requires=network.target local-fs.target
+After=network.target local-fs.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory={{ .WorkingDir }}
+Restart=on-failure
+ExecStart={{ .CommandLine }}
+ExecStop=/bin/kill -INT $MAINPID
+TimeoutStopSec=10
+{{ range .Env }}Environment={{ .Name }}="{{ .Value }}"
+{{ end }}

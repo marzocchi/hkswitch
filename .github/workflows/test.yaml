@@ -1,0 +1,24 @@
+name: test
+on:
+  pull_request:
+    branches:
+      - "*"
+  push:
+    branches:
+      - "*"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v1
+        with:
+          go-version: 1.16.x
+      - name: Vet and test
+        run: |
+          go version
+          echo "Running vet" >&2
+          go vet ./...
+          echo "Running tests" >&2
+          go test -cover ./...

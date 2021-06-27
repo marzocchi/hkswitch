@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+<key>Label</key>
+<string>io.mrz.hkswitch.test</string>
+
+<key>RunAtLoad</key>
+<true/>
+
+<key>EnvironmentVariables</key>
+<dict>
+<key>VARNAME1</key>
+<string><![CDATA[VARVALUE1]]></string>
+<key>VARNAME2</key>
+<string><![CDATA[VARVALUE2]]></string>
+</dict>
+
+<key>WorkingDirectory</key>
+<string>/var/run</string>
+
+<key>ProgramArguments</key>
+<array>
+<string>cmd</string><string>arg</string>
+</array>
+
+</dict>
+</plist>

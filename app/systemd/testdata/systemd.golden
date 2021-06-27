@@ -1,0 +1,18 @@
+[Unit]
+Description=test
+Requires=network.target local-fs.target
+After=network.target local-fs.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/run
+Restart=on-failure
+ExecStart=cmd arg
+ExecStop=/bin/kill -INT $MAINPID
+TimeoutStopSec=10
+Environment=VARNAME1="VARVALUE1"
+Environment=VARNAME2="VARVALUE2"
