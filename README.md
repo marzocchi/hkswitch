@@ -58,7 +58,7 @@ This _not very useful_ example show how to create an HomeKit bridge with one swi
           - DURATION=30
           
         # command line to start the service
-        command: [sleep, "$DURATION"]
+        command: [bash, -c, "sleep $DURATION"]
    
         # optionally set to the signal preferred by the service for a clean shutdown
         stop-signal: INT
