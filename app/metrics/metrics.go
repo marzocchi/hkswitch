@@ -5,23 +5,34 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"mrz.io/hkswitch/service"
 	"net"
 	"net/http"
 	"time"
 )
 
-var serviceState = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "hkswitch_up",
-}, []string{"service"})
+const serviceStateMetricName = "hkswitch_up"
 
-func UpdateServiceState(serviceLabel string, up bool) {
+var serviceStateMetric = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: serviceStateMetricName}, []string{"service"})
+
+// ConsumeServiceStateChanges updates the hkswitch_up metric from the given subscription channel.
+func ConsumeServiceStateChanges(subscription <-chan service.Change) {
+	go func() {
+		for change := range subscription {
+			updateServiceState(change.Service.Name(), change.Running)
+		}
+	}()
+}
+
+// updateServiceState records a new value for the up/down state of the named service.
+func updateServiceState(name string, up bool) {
 	var v float64
 
 	if up {
 		v = 1.0
 	}
 
-	serviceState.WithLabelValues(serviceLabel).Set(v)
+	serviceStateMetric.WithLabelValues(name).Set(v)
 }
 
 type Server struct {

@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"time"
 )
 
 type Service interface {
@@ -22,6 +24,12 @@ type Handle interface {
 
 	// Stop stops the service.
 	Stop()
+}
+
+type Change struct {
+	Service   Service
+	Running   bool
+	Timestamp time.Time
 }
 
 type query struct {
@@ -50,12 +58,14 @@ type Manager struct {
 	stop    chan Service
 	stopped chan Service
 
-	callback Callback
+	subscribe     chan chan Change
+	unsubscribe   chan chan Change
+	subscriptions []chan Change
 
 	queries chan query
 }
 
-func NewManager(f Callback) *Manager {
+func NewManager() *Manager {
 	mgr := &Manager{
 		didShutdown: make(chan struct{}),
 		shutdown:    make(chan struct{}),
@@ -64,45 +74,104 @@ func NewManager(f Callback) *Manager {
 		stopped:     make(chan Service),
 		queries:     make(chan query),
 		running:     make(map[Service]Handle),
-		callback:    f,
+		subscribe:   make(chan chan Change),
+		unsubscribe: make(chan chan Change),
 	}
 
 	go func() {
-		defer mgr.performShutdown()
-
+	loop:
 		for {
 			select {
+			case ch := <-mgr.subscribe:
+				mgr.addSubscription(ch)
+			case rmCh := <-mgr.unsubscribe:
+				mgr.removeSubscription(rmCh)
 			case svc := <-mgr.start:
-				mgr.doStart(svc)
+				mgr.startService(svc)
 			case q := <-mgr.queries:
-				mgr.doQuery(q)
+				mgr.queryService(q)
 			case svc := <-mgr.stop:
-				mgr.doStop(svc)
+				mgr.stopService(svc)
 			case svc := <-mgr.stopped:
-				mgr.doStopped(svc)
+				mgr.serviceStopped(svc)
 			case <-mgr.shutdown:
-				return
+				break loop
 			}
 		}
+
+		mgr.performShutdown()
 	}()
 
 	return mgr
 }
 
-func (mgr *Manager) invokeCallback(svc Service, running bool) {
-	if mgr.callback == nil {
-		return
+// Subscribe returns a new channel to which a Change is written every time a service
+// starts and stops, and it's closed when ctx is canceled or the Manager shutdowns.
+// There might still be Changes to read after subscription is canceled.
+// If Subscribe is called after shutdown a closed channel is returned.
+func (mgr *Manager) Subscribe(ctx context.Context) <-chan Change {
+	ch := make(chan Change, 1000)
+
+	select {
+	case <-mgr.shutdown:
+		// no one's tracking new subscription, so just return a closed chan
+		// to fulfill the return type with and that's it
+		close(ch)
+	default:
+		go func() {
+			select {
+			case <-mgr.shutdown:
+				// we can stop here, then subscription will be deleted and the channel closed
+				// as part of shutting down
+				return
+			case <-ctx.Done():
+				mgr.unsubscribe <- ch
+			}
+		}()
+
+		mgr.subscribe <- ch
 	}
 
-	go func() {
-		mgr.callback(svc, running)
+	return ch
+}
+
+func (mgr *Manager) addSubscription(ch chan Change) {
+	mgr.subscriptions = append(mgr.subscriptions, ch)
+}
+
+func (mgr *Manager) removeSubscription(rmCh chan Change) {
+	defer func() {
+		close(rmCh)
 	}()
+
+	var tmp []chan Change
+	for _, ch := range mgr.subscriptions {
+		if ch != rmCh {
+			tmp = append(tmp, ch)
+		}
+	}
+	mgr.subscriptions = tmp
+}
+
+func (mgr *Manager) notifySubscribers(svc Service, running bool) {
+	t := time.Now()
+	for _, ch := range mgr.subscriptions {
+		select {
+		case <-mgr.shutdown:
+		case ch <- Change{Service: svc, Running: running, Timestamp: t}:
+		default:
+		}
+	}
 }
 
 // performShutdown stops any running service and waits for the services to report stopped, serving any query in
 // the meanwhile.
 func (mgr *Manager) performShutdown() {
 	defer func() {
+		for _, ch := range mgr.subscriptions {
+			mgr.removeSubscription(ch)
+		}
+
 		close(mgr.didShutdown)
 	}()
 
@@ -114,15 +183,16 @@ func (mgr *Manager) performShutdown() {
 		h.Stop()
 	}
 
+loop:
 	for {
 		select {
 		case q := <-mgr.queries:
-			mgr.doQuery(q)
+			mgr.queryService(q)
 		case svc := <-mgr.stopped:
-			mgr.doStopped(svc)
+			mgr.serviceStopped(svc)
 
 			if len(mgr.running) == 0 {
-				return
+				break loop
 			}
 		}
 	}
@@ -148,8 +218,8 @@ func (mgr *Manager) Start(services ...Service) {
 	}
 }
 
-// doStart starts the Service, adding it to running only if it starts without error.
-func (mgr *Manager) doStart(svc Service) {
+// startService starts the Service, adding it to running only if it starts without error.
+func (mgr *Manager) startService(svc Service) {
 	if _, ok := mgr.running[svc]; ok {
 		return
 	}
@@ -161,7 +231,7 @@ func (mgr *Manager) doStart(svc Service) {
 
 	mgr.running[svc] = handle
 	mgr.waitHandle(handle, svc)
-	mgr.invokeCallback(svc, true)
+	mgr.notifySubscribers(svc, true)
 }
 
 // Running reports on the current running state of a service.
@@ -176,8 +246,8 @@ func (mgr *Manager) Running(svc Service) bool {
 	}
 }
 
-// doQuery checks if a service is running and writes the state to query.reply.
-func (mgr *Manager) doQuery(q query) {
+// queryService checks if a service is running and writes the state to query.reply.
+func (mgr *Manager) queryService(q query) {
 	_, ok := mgr.running[q.svc]
 	q.reply <- ok
 }
@@ -194,18 +264,18 @@ func (mgr *Manager) Stop(services ...Service) {
 	}
 }
 
-// doStop stops the services if it is running.
-func (mgr *Manager) doStop(svc Service) {
+// stopService stops the services if it is running.
+func (mgr *Manager) stopService(svc Service) {
 	if handle, ok := mgr.running[svc]; ok {
 		handle.Stop()
 	}
 }
 
-// doStopped removes the service from running.
-func (mgr *Manager) doStopped(svc Service) {
+// serviceStopped removes the service from running.
+func (mgr *Manager) serviceStopped(svc Service) {
 	if _, ok := mgr.running[svc]; ok {
 		delete(mgr.running, svc)
-		mgr.invokeCallback(svc, false)
+		mgr.notifySubscribers(svc, false)
 	}
 }
 
