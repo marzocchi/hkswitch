@@ -68,4 +68,3 @@ func (c *Unit) getTemplate(initType string) (*template.Template, error) {
 
 	return t, nil
 }
-

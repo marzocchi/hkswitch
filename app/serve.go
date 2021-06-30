@@ -62,32 +62,39 @@ func Serve(ctx context.Context, stdout, stderr io.Writer, configFile string) err
 		return err
 	}
 
-	mgr := service.NewManager(func(svc service.Service, running bool) {
-		metrics.UpdateServiceState(svc.Name(), running)
-	})
+	mgr := service.NewManager()
+	metrics.ConsumeServiceStateChanges(mgr.Subscribe(ctx))
 
 	bridge, err := homekit.NewBridge(cfg, mgr, services...)
 	if err != nil {
 		return err
 	}
 
-	go func() {
-		<-ctx.Done()
-		mgr.Shutdown()
-		bridge.Stop()
-	}()
-
-	// start any service set to autostart
-	startupServices := getStartupServices(services, cfg)
-	if len(startupServices) > 0 {
-		log.Info.Printf("startup services: %+q", startupServices)
-		mgr.Start(startupServices...)
-	}
+	shutdownOnCtxDone(ctx, bridge, mgr)
+	autostart(mgr, services, cfg)
 
 	log.Info.Printf("starting bridge...")
 	err = bridge.Start()
 
 	return err
+}
+
+func autostart(mgr *service.Manager, services []service.Service, cfg config.Config) {
+	startupServices := getStartupServices(services, cfg)
+	if len(startupServices) == 0 {
+		return
+	}
+
+	log.Info.Printf("startup services: %+q", startupServices)
+	mgr.Start(startupServices...)
+}
+
+func shutdownOnCtxDone(ctx context.Context, bridge *homekit.Bridge, mgr *service.Manager) {
+	go func() {
+		<-ctx.Done()
+		mgr.Shutdown()
+		bridge.Stop()
+	}()
 }
 
 func getStartupServices(services []service.Service, cfg config.Config) []service.Service {
