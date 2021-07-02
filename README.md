@@ -1,4 +1,4 @@
-hkswitch ![tests badge][tests-badge]
+hkswitch [![tests badge][tests-badge]][tests-page]
 ===
 
 Control programs and services on Linux and macOS from HomeKit.
@@ -98,3 +98,4 @@ Caveats
   confuse HomeKit, always add new services by appending to the `services` key.
 
 [tests-badge]: https://github.com/marzocchi/hkswitch/actions/workflows/test.yaml/badge.svg
+[tests-page]: https://github.com/marzocchi/hkswitch/actions/workflows/test.yaml
