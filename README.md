@@ -10,6 +10,8 @@ Install
 $ go get mrz.io/hkswitch 
 ```
 
+Or [grab the latest release][rel].
+
 Usage example
 ---
 
@@ -99,3 +101,4 @@ Caveats
 
 [tests-badge]: https://github.com/marzocchi/hkswitch/actions/workflows/test.yaml/badge.svg
 [tests-page]: https://github.com/marzocchi/hkswitch/actions/workflows/test.yaml
+[rel]: https://github.com/marzocchi/hkswitch/releases/latest
