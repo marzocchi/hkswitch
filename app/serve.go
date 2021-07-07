@@ -14,16 +14,18 @@ import (
 	"time"
 )
 
-const Name = "hkswitch"
-const version = "v0.0.1"
-const manufacturer = "mrz.io"
+var Version = "v0.0.1"
 
-const separator = " | "
+const (
+	Name         = "hkswitch"
+	manufacturer = "mrz.io"
+	separator    = " | "
+)
 
 func init() {
 	config.DefaultConfig.Bridge.Manufacturer = manufacturer
 	config.DefaultConfig.Bridge.Model = Name
-	config.DefaultConfig.Bridge.Firmware = version
+	config.DefaultConfig.Bridge.Firmware = Version
 }
 
 type StreamsFactory interface {
