@@ -10,6 +10,8 @@ import (
 	"syscall"
 )
 
+var version = "v0.0.1"
+
 var printConfCmd = &cobra.Command{
 	Use:   "print-conf",
 	Short: "Print configuration files for different init systems",
@@ -42,14 +44,17 @@ var printLaunchdConfCmd = &cobra.Command{
 }
 
 var rootCmd = &cobra.Command{
-	Use:  fmt.Sprintf("%s CONFIG_FILE", os.Args[0]),
-	Args: cobra.ExactArgs(1),
+	Version: version,
+	Use:     fmt.Sprintf("%s CONFIG_FILE", os.Args[0]),
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return app.Serve(cmd.Context(), os.Stdout, os.Stderr, args[0])
 	},
 }
 
 func init() {
+	app.Version = version
+
 	printLaunchdConfCmd.Flags().StringArrayP("env", "e", []string{}, "copy the value of an environment variable into the"+
 		" generated config file")
 
